@@ -3,7 +3,7 @@ name: Build, Scan, Deploy to AWS EKS
 on:
   push:
     branches:
-      - ci-cd.yaml
+      - main
 
 jobs:
   deploy:
