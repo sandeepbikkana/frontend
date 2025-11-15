@@ -57,7 +57,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: gcr.io/YOUR_PROJECT/backend:latest
+          image: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo:{{TAG}}
           ports:
             - containerPort: 1337
           env:

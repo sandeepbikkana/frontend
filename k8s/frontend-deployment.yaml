@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: gcr.io/YOUR_PROJECT/frontend:latest
+          image: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/frontend-ecr-repo:{{TAG}}
           ports:
             - containerPort: 3000
           envFrom:

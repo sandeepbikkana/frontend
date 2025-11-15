@@ -1,110 +1,9 @@
-# name: Build, Scan, Deploy to Staging
-
-# on:
-#   push:
-#     branches:
-#       - ci-cd.yaml
-
-# jobs:
-#   build-scan-deploy:
-#     runs-on: ubuntu-latest
-
-#     env:
-#       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}   chrome-reserve-476216-r9
-#       CLUSTER: ${{ secrets.GCP_GKE_CLUSTER }}     dev-cluster
-#       REGION: ${{ secrets.GCP_REGION }}            us-east1
-#       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}  https://sonarcloud.io
-#       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}        
-#       TAG: ${{ github.sha }}
-
-#     steps:
-#       # -----------------------------------------------
-#       # 1. Checkout Code
-#       # -----------------------------------------------
-#       - name: Checkout repo
-#         uses: actions/checkout@v3
-
-#       # -----------------------------------------------
-#       # 2. Run SonarQube Scan (no npm install needed)
-#       # -----------------------------------------------
-#       - name: Create SonarQube Project (if not exists)
-#         run: |
-#           PROJECT_KEY="project-${{ github.repository_id }}"
-#           curl -u "${SONAR_TOKEN}:" -X POST \
-#             "${SONAR_HOST_URL}/api/projects/create?project=${PROJECT_KEY}" || true
-
-#       - name: SonarQube Code Scan
-#         uses: sonarsource/sonarqube-scan-action@v2
-#         with:
-#           args: >
-#             -Dsonar.projectKey=project-${{ github.repository_id }}
-#             -Dsonar.sources=.
-#             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
-#         env:
-#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-#       # -----------------------------------------------
-#       # 3. Authenticate with Google Cloud
-#       # -----------------------------------------------
-#       - name: Authenticate to GCP
-#         uses: google-github-actions/auth@v1
-#         with:
-#           credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-#       - name: Setup gcloud
-#         uses: google-github-actions/setup-gcloud@v1
-
-#       - name: Configure Docker for GCR
-#         run: gcloud auth configure-docker gcr.io
-
-#       # -----------------------------------------------
-#       # 4. Build Docker Images (dependencies install inside Dockerfile)
-#       # -----------------------------------------------
-#       - name: Build Frontend Image
-#         run: |
-#           docker build -t gcr.io/$PROJECT_ID/frontend:${TAG} ./frontend-main
-
-#       - name: Build Backend Image
-#         run: |
-#           docker build -t gcr.io/$PROJECT_ID/backend:${TAG} ./backend
-
-#       # -----------------------------------------------
-#       # 5. Push Images
-#       # -----------------------------------------------
-#       - name: Push Frontend
-#         run: docker push gcr.io/$PROJECT_ID/frontend:${TAG}
-
-#       - name: Push Backend
-#         run: docker push gcr.io/$PROJECT_ID/backend:${TAG}
-
-#       # -----------------------------------------------
-#       # 6. Update Kubernetes Manifests With SHA
-#       # -----------------------------------------------
-#       - name: Update manifests with SHA tag
-#         run: |
-#           sed -i "s/{{TAG}}/${TAG}/g" k8s/frontend-deployment.yaml
-#           sed -i "s/{{TAG}}/${TAG}/g" k8s/backend-deployment.yaml
-
-#       # -----------------------------------------------
-#       # 7. Deploy to GKE
-#       # -----------------------------------------------
-#       - name: Deploy to GKE
-#         run: |
-#           gcloud container clusters get-credentials $CLUSTER --region $REGION --project $PROJECT_ID
-#           kubectl apply -f k8s/
-#           ####kubectl rollout status deployment/frontend-staging -n staging
-#           #####kubectl rollout status deployment/strapi-staging -n staging
-
-
-
-
-
 name: Build, Scan, Deploy to AWS EKS
 
 on:
   push:
     branches:
-      - staging
+      - main
 
 jobs:
   deploy:
@@ -113,43 +12,28 @@ jobs:
     env:
       AWS_REGION: ap-south-1
       EKS_CLUSTER: test-eks-cluster
-      ECR_BACKEND: backend-ecr-repo
-      ECR_FRONTEND: frontend-ecr-repo
+      ECR_BACKEND: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo
+      ECR_FRONTEND: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/frontend-ecr-repo
       TAG: ${{ github.sha }}
-    #   SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-    #   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       # -----------------------------------------------------
-      # CHECKOUT
+      # CHECKOUT MAIN REPO
       # -----------------------------------------------------
-      - name: Checkout code
+      - name: Checkout main repo
         uses: actions/checkout@v3
 
       # -----------------------------------------------------
-      # SONARQUBE - Create Project
+      # CHECKOUT BACKEND REPO (SEPARATE)
       # -----------------------------------------------------
-    #   - name: Create SonarQube Project (if not exists)
-    #     run: |
-    #       PROJECT_KEY="project-${{ github.repository_id }}"
-    #       curl -s -u "${SONAR_TOKEN}:" -X POST \
-    #         "${SONAR_HOST_URL}/api/projects/create?project=${PROJECT_KEY}" || true
-
-    #   # -----------------------------------------------------
-    #   # SONARQUBE SCAN
-    #   # -----------------------------------------------------
-    #   - name: SonarQube Scan
-    #     uses: sonarsource/sonarqube-scan-action@v2
-    #     with:
-    #       args: >
-    #         -Dsonar.projectKey=project-${{ github.repository_id }}
-    #         -Dsonar.sources=.
-    #         -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
-    #     env:
-    #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Checkout backend repository
+        uses: actions/checkout@v3
+        with:
+          repository: sandeepbikkana/backend-service
+          path: backend
 
       # -----------------------------------------------------
-      # LOGIN TO AWS
+      # CONFIGURE AWS CREDENTIALS
       # -----------------------------------------------------
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -165,6 +49,7 @@ jobs:
         run: |
           aws ecr get-login-password --region $AWS_REGION \
             | docker login --username AWS --password-stdin $ECR_BACKEND
+
           aws ecr get-login-password --region $AWS_REGION \
             | docker login --username AWS --password-stdin $ECR_FRONTEND
 
@@ -180,7 +65,7 @@ jobs:
           docker build -t $ECR_FRONTEND:$TAG ./frontend-main
 
       # -----------------------------------------------------
-      # PUSH IMAGES
+      # PUSH IMAGES TO ECR
       # -----------------------------------------------------
       - name: Push Backend Image
         run: docker push $ECR_BACKEND:$TAG
@@ -189,7 +74,7 @@ jobs:
         run: docker push $ECR_FRONTEND:$TAG
 
       # -----------------------------------------------------
-      # UPDATE MANIFEST TAGS
+      # UPDATE K8s MANIFEST TAGS
       # -----------------------------------------------------
       - name: Update manifest images
         run: |
@@ -197,14 +82,14 @@ jobs:
           sed -i "s/{{TAG}}/${TAG}/g" k8s/frontend-deployment.yaml
 
       # -----------------------------------------------------
-      # UPDATE KUBECONFIG FOR EKS
+      # UPDATE kubeconfig FOR EKS CLUSTER
       # -----------------------------------------------------
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
 
       # -----------------------------------------------------
-      # APPLY DEPLOYMENT TO EKS
+      # DEPLOY TO EKS
       # -----------------------------------------------------
       - name: Deploy to EKS
         run: |
