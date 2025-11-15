@@ -58,7 +58,7 @@ spec:
       containers:
         - name: backend
           #image: 2541f4172929e9aea5fe99ed80d859a36cf7c0f1
-          image: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo:2541f4172929e9aea5fe99ed80d859a36cf7c0f1
+          image: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo:{{TAG}}
           ports:
             - containerPort: 1337
           env:

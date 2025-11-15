@@ -25,7 +25,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: strapi-secrets
-                  key: DATABASE_USER
+                  key: DATABASE_USERNAME
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
