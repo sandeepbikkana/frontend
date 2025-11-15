@@ -96,3 +96,4 @@ jobs:
           kubectl apply -f k8s/
           kubectl rollout status deployment/backend
           kubectl rollout status deployment/frontend
+
