@@ -19,17 +19,17 @@ spec:
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: strapi-secrets
                   key: DATABASE_NAME
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: strapi-secrets
                   key: DATABASE_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: strapi-secrets
                   key: DATABASE_PASSWORD
           ports:
             - containerPort: 5432

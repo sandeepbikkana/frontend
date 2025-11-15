@@ -34,38 +34,38 @@ spec:
             - name: DATABASE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: DATABASE_USER
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: DATABASE_PASSWORD
             - name: DATABASE_NAME
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: DATABASE_NAME
 
             - name: APP_KEYS
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: APP_KEYS
             - name: API_TOKEN_SALT
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: API_TOKEN_SALT
             - name: ADMIN_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: ADMIN_JWT_SECRET
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: strapi-staging-secrets
+                  name: strapi-secrets
                   key: JWT_SECRET
 
         # ------------------------
