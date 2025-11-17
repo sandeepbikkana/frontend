@@ -6,9 +6,9 @@ on:
       - main
 
 env:
-  PROJECT_ID: YOUR_PROJECT_ID
+  PROJECT_ID: chrome-reserve-476216-r9
   REGION: asia-south1
-  REPO: gtm-repo
+  REPO: frontend
   BACKEND_IMAGE_NAME: backend
   FRONTEND_IMAGE_NAME: frontend
   CLUSTER: gtm-staging

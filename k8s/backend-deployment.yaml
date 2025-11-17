@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: strapi
-          image: asia-south1-docker.pkg.dev/YOUR_PROJECT/gtm-repo/backend:latest
+          image: asia-south1-docker.pkg.dev/staging/gtm-repo/backend:latest
           ports:
             - containerPort: 1337
           env:
