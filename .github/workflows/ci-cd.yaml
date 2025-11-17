@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
         if: false # change to true if backend repo is separate
         with:
-          repository: org/backend-repo
+          repository: https://github.com/gotomarketlabs/backend.git
           path: backend
 
       # ------------------------------------------------------------------
