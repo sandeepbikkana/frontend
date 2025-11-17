@@ -1,52 +1,9 @@
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: strapi-backend
-# spec:
-#   replicas: 2
-#   selector:
-#     matchLabels:
-#       app: strapi
-#   template:
-#     metadata:
-#       labels:
-#         app: strapi
-#     spec:
-#       containers:
-#         - name: strapi
-#           image: gcr.io/gtmlabs/backend:{{TAG}}
-#           ports:
-#             - containerPort: 1337
-#           envFrom:
-#             - secretRef:
-#                 name: strapi-secrets
-#           env:
-#             - name: NODE_ENV
-#               value: "production"
-#             - name: DATABASE_CLIENT
-#               value: "postgres"
-#             - name: DATABASE_HOST
-#               value: "127.0.0.1"
-#             - name: DATABASE_PORT
-#               value: "5432"
-
-#         # --- Cloud SQL Auth Proxy ---
-#         - name: cloudsql-proxy
-#           image: gcr.io/cloudsql-docker/gce-proxy:1.33.5
-#           command:
-#             - "/cloud_sql_proxy"
-#             - "-instances=YOUR_PROJECT:REGION:INSTANCE_NAME=tcp:5432"
-#           securityContext:
-#             runAsNonRoot: true
-
-
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: backend
@@ -56,65 +13,28 @@ spec:
         app: backend
     spec:
       containers:
-        - name: backend
-          image: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo:{{TAG}}
+        - name: strapi
+          image: asia-south1-docker.pkg.dev/YOUR_PROJECT/gtm-repo/backend:latest
           ports:
             - containerPort: 1337
-
-          # Load ALL Strapi secrets from one source
-          envFrom:
-            - secretRef:
-                name: strapi-secrets
-
-          # Override only DB config (hostname, port)
           env:
             - name: DATABASE_CLIENT
               value: "postgres"
             - name: DATABASE_HOST
-              value: "postgres"
+              value: "127.0.0.1"
             - name: DATABASE_PORT
               value: "5432"
-
-            # Explicitly map required Strapi keys from *strapi-secrets*
-            - name: APP_KEYS
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: APP_KEYS
-
-            - name: API_TOKEN_SALT
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: API_TOKEN_SALT
-
-            - name: ADMIN_JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: ADMIN_JWT_SECRET
-
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: JWT_SECRET
-
-            # Optional extra DB config (already loaded via envFrom)
-            - name: DATABASE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: DATABASE_USERNAME
-
-            - name: DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: DATABASE_PASSWORD
-
             - name: DATABASE_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: DATABASE_NAME
+              value: "strapi"
+            - name: DATABASE_USERNAME
+              value: "strapi"
+          envFrom:
+            - secretRef:
+                name: strapi-secrets
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.12.0
+          args:
+            - "--port=5432"
+            - "YOUR_PROJECT:asia-south1:gtm-postgres"
+          securityContext:
+            runAsNonRoot: true
