@@ -1,107 +1,82 @@
-name: Build, Scan, Deploy to GKE
+name: Frontend + Backend CI/CD to GKE
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  PROJECT_ID: chrome-reserve-476216-r9
-  REGION: asia-south1
-  REPO: frontend
-  BACKEND_IMAGE_NAME: backend
-  FRONTEND_IMAGE_NAME: frontend
-  CLUSTER: gtm-staging
-  ZONE: asia-south1-a
-  TAG: ${{ github.sha }}
+    branches: ["main"]
 
 jobs:
-  build-scan-deploy:
+  build-test-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------------
-      # CHECKOUT MAIN REPO
-      # ------------------------------------------------------------------
-      - name: Checkout main repo
-        uses: actions/checkout@v4
+    - name: Checkout Frontend
+      uses: actions/checkout@v3
 
-      # ------------------------------------------------------------------
-      # If backend exists in subfolder (backend/)
-      # ------------------------------------------------------------------
-      - name: Checkout backend (if separate repo)
-        uses: actions/checkout@v4
-        if: false # change to true if backend repo is separate
-        with:
-          repository: https://github.com/gotomarketlabs/backend.git
-          path: backend
+    - name: Checkout Backend Repo
+      uses: actions/checkout@v3
+      with:
+        repository: sandeepbikkana/backend-service
+        path: backend
 
-      # ------------------------------------------------------------------
-      # SETUP GOOGLE CLOUD
-      # ------------------------------------------------------------------
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          project_id: ${{ env.PROJECT_ID }}
-          export_default_credentials: true
+    # Authenticate to Google Cloud
+    - name: Auth to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Authenticate Docker for Artifact Registry
-        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+    # Install real gcloud + GKE auth plugin (required!)
+    - name: Install gcloud + GKE auth plugin
+      run: |
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+        curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+        sudo apt-get update
+        sudo apt-get install -y google-cloud-cli google-cloud-sdk-gke-gcloud-auth-plugin kubectl
+    - name: Configure Docker auth for Artifact Registry
+      run: gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
 
-      # ------------------------------------------------------------------
-      # BUILD BACKEND IMAGE
-      # ------------------------------------------------------------------
-      - name: Build Backend image
-        working-directory: ./backend
-        id: backendbuild
-        run: |
-          BACKEND_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${BACKEND_IMAGE_NAME}:${TAG}"
-          docker build -t "${BACKEND_URI}" .
-          echo "backend_image=${BACKEND_URI}" >> $GITHUB_OUTPUT
+    # Build Frontend
+    - name: Build Frontend Docker Image
+      run: |
+        cd frontend
+        FE_IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ secrets.AR_REPO_FRONTEND }}/frontend:${{ github.sha }}"
+        echo "FE_IMAGE=$FE_IMAGE" >> $GITHUB_ENV
+        docker build -t $FE_IMAGE .
+    # Build Backend
+    - name: Build Backend Docker Image
+      run: |
+        cd backend
+        BE_IMAGE="${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ secrets.AR_REPO_BACKEND }}/backend:${{ github.sha }}"
+        echo "BE_IMAGE=$BE_IMAGE" >> $GITHUB_ENV
+        docker build -t $BE_IMAGE .
+    # Push images
+    - name: Push Frontend Image
+      run: docker push ${{ env.FE_IMAGE }}
 
-      - name: Push Backend image
-        run: |
-          docker push "${{ steps.backendbuild.outputs.backend_image }}"
+    - name: Push Backend Image
+      run: docker push ${{ env.BE_IMAGE }}
 
-      # ------------------------------------------------------------------
-      # BUILD FRONTEND IMAGE
-      # ------------------------------------------------------------------
-      - name: Build Frontend image
-        working-directory: ./frontend
-        id: frontendbuild
-        run: |
-          FRONTEND_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${FRONTEND_IMAGE_NAME}:${TAG}"
-          docker build -t "${FRONTEND_URI}" .
-          echo "frontend_image=${FRONTEND_URI}" >> $GITHUB_OUTPUT
+    # Get kubeconfig with the correct GKE plugin
+    - name: Get GKE Credentials
+      run: |
+        gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER }} \
+          --region=${{ secrets.GKE_LOCATION }}
+    # Deploy backend
+    - name: Deploy Backend to GKE
+      run: |
+        sed -i "s|IMAGE_BACKEND|${{ env.BE_IMAGE }}|g" k8s/backend-deployment.yaml
+        kubectl apply -f k8s/backend-deployment.yaml
+    # Deploy frontend
+    - name: Deploy Frontend to GKE
+      run: |
+        sed -i "s|IMAGE_FRONTEND|${{ env.FE_IMAGE }}|g" k8s/frontend-deployment.yaml
+        kubectl apply -f k8s/frontend-deployment.yaml
+    # Apply other manifests (services, ingress, configmaps)
+    - name: Apply All K8s Files
+      run: kubectl apply -f k8s/
 
-      - name: Push Frontend image
-        run: |
-          docker push "${{ steps.frontendbuild.outputs.frontend_image }}"
-
-      # ------------------------------------------------------------------
-      # PATCH MANIFESTS WITH NEW IMAGE TAGS
-      # ------------------------------------------------------------------
-      - name: Update manifest images
-        run: |
-          sed -i "s|{{BACKEND_IMAGE}}|${{ steps.backendbuild.outputs.backend_image }}|g" k8s/backend-deployment.yaml
-          sed -i "s|{{FRONTEND_IMAGE}}|${{ steps.frontendbuild.outputs.frontend_image }}|g" k8s/frontend-deployment.yaml
-
-      # ------------------------------------------------------------------
-      # CONNECT TO GKE CLUSTER
-      # ------------------------------------------------------------------
-      - name: Get GKE credentials
-        run: |
-          gcloud container clusters get-credentials ${CLUSTER} \
-            --zone ${ZONE} \
-            --project ${PROJECT_ID}
-
-      # ------------------------------------------------------------------
-      # DEPLOY
-      # ------------------------------------------------------------------
-      - name: Deploy to GKE
-        run: |
-          kubectl apply -f k8s/
-          kubectl rollout status deployment/backend --timeout=180s
-          kubectl rollout status deployment/frontend --timeout=180s
+    # Verify rollouts
+    - name: Verify Deployments
+      run: |
+        kubectl rollout status deployment/frontend-deployment --timeout=120s
+        kubectl rollout status deployment/backend-deployment --timeout=120s
 
