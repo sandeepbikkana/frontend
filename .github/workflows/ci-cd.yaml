@@ -2,7 +2,7 @@ name: Frontend + Backend CI/CD to GKE
 
 on:
   push:
-    branches: ["mai"]
+    branches: ["main"]
 
 jobs:
   build-test-push-deploy:
