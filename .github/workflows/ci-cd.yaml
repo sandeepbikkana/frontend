@@ -3,7 +3,7 @@ name: Build, Scan, Deploy to GKE
 on:
   push:
     branches:
-      - mai
+      - main
 
 env:
   PROJECT_ID: chrome-reserve-476216-r9
