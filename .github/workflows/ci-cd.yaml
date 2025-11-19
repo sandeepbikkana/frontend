@@ -1,99 +1,107 @@
-name: Build, Scan, Deploy to AWS EKS.
+name: Build, Scan, Deploy to GKE
 
 on:
   push:
     branches:
-      - main
+      - mai
+
+env:
+  PROJECT_ID: chrome-reserve-476216-r9
+  REGION: asia-south1
+  REPO: frontend
+  BACKEND_IMAGE_NAME: backend
+  FRONTEND_IMAGE_NAME: frontend
+  CLUSTER: gtm-staging
+  ZONE: asia-south1-a
+  TAG: ${{ github.sha }}
 
 jobs:
-  deploy:
+  build-scan-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: ap-south-1
-      EKS_CLUSTER: test-eks-cluster
-      ECR_BACKEND: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/backend-ecr-repo
-      ECR_FRONTEND: 730335385079.dkr.ecr.ap-south-1.amazonaws.com/frontend-ecr-repo
-      TAG: ${{ github.sha }}
-
     steps:
-      # -----------------------------------------------------
+      # ------------------------------------------------------------------
       # CHECKOUT MAIN REPO
-      # -----------------------------------------------------
+      # ------------------------------------------------------------------
       - name: Checkout main repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # -----------------------------------------------------
-      # CHECKOUT BACKEND REPO (SEPARATE)
-      # -----------------------------------------------------
-      - name: Checkout backend repository
-        uses: actions/checkout@v3
+      # ------------------------------------------------------------------
+      # If backend exists in subfolder (backend/)
+      # ------------------------------------------------------------------
+      - name: Checkout backend (if separate repo)
+        uses: actions/checkout@v4
+        if: false # change to true if backend repo is separate
         with:
-          repository: sandeepbikkana/backend-service
+          repository: https://github.com/gotomarketlabs/backend.git
           path: backend
 
-      # -----------------------------------------------------
-      # CONFIGURE AWS CREDENTIALS
-      # -----------------------------------------------------
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
+      # ------------------------------------------------------------------
+      # SETUP GOOGLE CLOUD
+      # ------------------------------------------------------------------
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
+          export_default_credentials: true
 
-      # -----------------------------------------------------
-      # LOGIN TO ECR
-      # -----------------------------------------------------
-      - name: Login to ECR
+      - name: Authenticate Docker for Artifact Registry
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      # ------------------------------------------------------------------
+      # BUILD BACKEND IMAGE
+      # ------------------------------------------------------------------
+      - name: Build Backend image
+        working-directory: ./backend
+        id: backendbuild
         run: |
-          aws ecr get-login-password --region $AWS_REGION \
-            | docker login --username AWS --password-stdin $ECR_BACKEND
+          BACKEND_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${BACKEND_IMAGE_NAME}:${TAG}"
+          docker build -t "${BACKEND_URI}" .
+          echo "backend_image=${BACKEND_URI}" >> $GITHUB_OUTPUT
 
-          aws ecr get-login-password --region $AWS_REGION \
-            | docker login --username AWS --password-stdin $ECR_FRONTEND
-
-      # -----------------------------------------------------
-      # BUILD DOCKER IMAGES
-      # -----------------------------------------------------
-      - name: Build Backend Image
+      - name: Push Backend image
         run: |
-          docker build -t $ECR_BACKEND:$TAG ./backend
+          docker push "${{ steps.backendbuild.outputs.backend_image }}"
 
-      - name: Build Frontend Image
+      # ------------------------------------------------------------------
+      # BUILD FRONTEND IMAGE
+      # ------------------------------------------------------------------
+      - name: Build Frontend image
+        working-directory: ./frontend
+        id: frontendbuild
         run: |
-          docker build -t $ECR_FRONTEND:$TAG ./frontend-main
+          FRONTEND_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${FRONTEND_IMAGE_NAME}:${TAG}"
+          docker build -t "${FRONTEND_URI}" .
+          echo "frontend_image=${FRONTEND_URI}" >> $GITHUB_OUTPUT
 
-      # -----------------------------------------------------
-      # PUSH IMAGES TO ECR
-      # -----------------------------------------------------
-      - name: Push Backend Image
-        run: docker push $ECR_BACKEND:$TAG
+      - name: Push Frontend image
+        run: |
+          docker push "${{ steps.frontendbuild.outputs.frontend_image }}"
 
-      - name: Push Frontend Image
-        run: docker push $ECR_FRONTEND:$TAG
-
-      # -----------------------------------------------------
-      # UPDATE K8s MANIFEST TAGS
-      # -----------------------------------------------------
+      # ------------------------------------------------------------------
+      # PATCH MANIFESTS WITH NEW IMAGE TAGS
+      # ------------------------------------------------------------------
       - name: Update manifest images
         run: |
-          sed -i "s/{{TAG}}/${TAG}/g" k8s/backend-deployment.yaml
-          sed -i "s/{{TAG}}/${TAG}/g" k8s/frontend-deployment.yaml
+          sed -i "s|{{BACKEND_IMAGE}}|${{ steps.backendbuild.outputs.backend_image }}|g" k8s/backend-deployment.yaml
+          sed -i "s|{{FRONTEND_IMAGE}}|${{ steps.frontendbuild.outputs.frontend_image }}|g" k8s/frontend-deployment.yaml
 
-      # -----------------------------------------------------
-      # UPDATE kubeconfig FOR EKS CLUSTER
-      # -----------------------------------------------------
-      - name: Update kubeconfig
+      # ------------------------------------------------------------------
+      # CONNECT TO GKE CLUSTER
+      # ------------------------------------------------------------------
+      - name: Get GKE credentials
         run: |
-          aws eks update-kubeconfig --name $EKS_CLUSTER --region $AWS_REGION
+          gcloud container clusters get-credentials ${CLUSTER} \
+            --zone ${ZONE} \
+            --project ${PROJECT_ID}
 
-      # -----------------------------------------------------
-      # DEPLOY TO EKS
-      # -----------------------------------------------------
-      - name: Deploy to EKS
+      # ------------------------------------------------------------------
+      # DEPLOY
+      # ------------------------------------------------------------------
+      - name: Deploy to GKE
         run: |
           kubectl apply -f k8s/
-          kubectl rollout status deployment/backend
-          kubectl rollout status deployment/frontend
+          kubectl rollout status deployment/backend --timeout=180s
+          kubectl rollout status deployment/frontend --timeout=180s
 
