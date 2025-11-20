@@ -13,11 +13,27 @@ spec:
         app: frontend
     spec:
       containers:
-      - name: frontend
-        image: IMAGE_FRONTEND
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "http://backend.default.svc.cluster.local"
+        - name: frontend
+          image: IMAGE_FRONTEND  # replaced by CI
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
 
