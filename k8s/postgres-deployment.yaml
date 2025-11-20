@@ -28,7 +28,7 @@ spec:
                   name: strapi-secrets
                   key: DATABASE_PASSWORD
 
-            # 🔥 This is the fix for your crash:
+            #  This is the fix for your crash:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
 
@@ -40,5 +40,3 @@ spec:
         - name: postgres-storage
           persistentVolumeClaim:
             claimName: postgres-pvc
-
-
