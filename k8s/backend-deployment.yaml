@@ -14,14 +14,14 @@ spec:
     spec:
       containers:
         - name: strapi
-          image: IMAGE_BACKEND   # <-- replace with your build image
+          image: IMAGE_BACKEND   # replace via CI sed or set directly
           ports:
             - containerPort: 1337
           env:
             - name: DATABASE_CLIENT
-              value: postgres
+              value: "postgres"
             - name: DATABASE_HOST
-              value: postgres     # <-- Service name of DB
+              value: "postgres"
             - name: DATABASE_PORT
               value: "5432"
             - name: DATABASE_NAME
@@ -34,18 +34,40 @@ spec:
                   name: strapi-secrets
                   key: DATABASE_PASSWORD
 
-            # JWT + APP KEYS
+            - name: APP_URL
+              value: "https://YOUR_DOMAIN"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "1337"
+
+            # secrets (from k8s secret)
+            - name: APP_KEY1
+              valueFrom:
+                secretKeyRef:
+                  name: strapi-secrets
+                  key: APP_KEY1
+            - name: APP_KEY2
+              valueFrom:
+                secretKeyRef:
+                  name: strapi-secrets
+                  key: APP_KEY2
+            - name: APP_KEY3
+              valueFrom:
+                secretKeyRef:
+                  name: strapi-secrets
+                  key: APP_KEY3
+            - name: APP_KEY4
+              valueFrom:
+                secretKeyRef:
+                  name: strapi-secrets
+                  key: APP_KEY4
+
             - name: ADMIN_JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: strapi-secrets
                   key: ADMIN_JWT_SECRET
-
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: JWT_SECRET
 
             - name: API_TOKEN_SALT
               valueFrom:
@@ -53,29 +75,32 @@ spec:
                   name: strapi-secrets
                   key: API_TOKEN_SALT
 
-            - name: APP_KEY1
+            - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: strapi-secrets
-                  key: APP_KEY1
+                  key: JWT_SECRET
 
-            - name: APP_KEY2
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: APP_KEY2
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: 1337
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_health
+              port: 1337
+            initialDelaySeconds: 30
+            periodSeconds: 20
 
-            - name: APP_KEY3
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: APP_KEY3
-
-            - name: APP_KEY4
-              valueFrom:
-                secretKeyRef:
-                  name: strapi-secrets
-                  key: APP_KEY4
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 
 
 
