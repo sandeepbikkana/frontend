@@ -2,38 +2,70 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
+  labels:
+    app: frontend
+
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0       # ensures zero downtime
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: frontend
+
   template:
     metadata:
       labels:
         app: frontend
+
     spec:
       containers:
         - name: frontend
-          image: IMAGE_FRONTEND  # replaced by CI
+          image: IMAGE_FRONTEND        # Replaced via CI/CD
+          imagePullPolicy: Always
           ports:
             - containerPort: 3000
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "300m"
-              memory: "256Mi"
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+
+          # ---------------------------
+          # PRODUCTION HEALTH CHECKS
+          # (using /favicon.ico)
+          # ---------------------------
           readinessProbe:
             httpGet:
-              path: /health
+              path: /favicon.ico
               port: 3000
             initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 2
+
           livenessProbe:
             httpGet:
-              path: /health
+              path: /favicon.ico
               port: 3000
-            initialDelaySeconds: 15
-            periodSeconds: 20
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 2
+
+          # ---------------------------
+          # RESOURCE LIMITS (cost-optimized)
+          # ---------------------------
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 
