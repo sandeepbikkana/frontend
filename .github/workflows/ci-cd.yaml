@@ -2,7 +2,7 @@ name: Frontend + Backend CI/CD to GKE
 
 on:
   push:
-    branches: ["mai"]
+    branches: ["main"]
 
 jobs:
   build-test-push-deploy:
@@ -79,4 +79,9 @@ jobs:
       run: |
         kubectl rollout status deployment/frontend-deployment --timeout=120s
         kubectl rollout status deployment/backend-deployment --timeout=120s
+
+
+
+
+
 
